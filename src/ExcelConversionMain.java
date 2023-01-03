@@ -1,29 +1,21 @@
-import java.io.ByteArrayOutputStream;
-import java.io.File;
-import java.io.FileInputStream;
-import java.io.FileNotFoundException;
-import java.io.FileOutputStream;
-import java.io.IOException;
-import java.io.UnsupportedEncodingException;
+import java.io.*;
 import java.lang.reflect.Field;
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.Iterator;
-import java.util.Map;
+import java.util.*;
 
 import javax.swing.UIManager;
 
+import com.xl.model.StringEntry;
 import org.apache.commons.compress.archivers.dump.InvalidFormatException;
 import org.apache.poi.EncryptedDocumentException;
 import org.apache.poi.hssf.usermodel.HSSFWorkbook;
-import org.apache.poi.ss.usermodel.Cell;
-import org.apache.poi.ss.usermodel.Row;
-import org.apache.poi.ss.usermodel.Sheet;
-import org.apache.poi.ss.usermodel.Workbook;
+import org.apache.poi.ss.SpreadsheetVersion;
+import org.apache.poi.ss.formula.EvaluationWorkbook;
+import org.apache.poi.ss.formula.udf.UDFFinder;
+import org.apache.poi.ss.usermodel.*;
+import org.apache.poi.ss.util.CellAddress;
 import org.json.JSONException;
 import org.json.JSONObject;
 
-import com.sun.xml.bind.v2.schemagen.xmlschema.List;
 import com.xl.util.ClipBoard;
 import com.xl.util.ExcelUtil;
 import com.xl.util.FileUtils;
@@ -33,6 +25,7 @@ import com.xl.window.JSONToCodeWindow;
 
 public class ExcelConversionMain {
 	static String url = "https://github.com/fengdeyingzi/ExcelConversion.git";
+	static String coding = "UTF-8";
 	static String app_help = "控制台支持以下命令\n  -t 判断输入的类型 取值如下\n" + "    xmlToJson 将xml转json\n" + "    xml2xls 将xml转xls\n"
 			+ "    xls2xml 将xls转xml\n"+ "    xls2rc 将xls转rc文件\n" + " -i 输入的文件\n" + " -o 输出的文件\n" + " -coding 文件的文本编码 默认utf-8\n" + "开源地址：" + url;
 
@@ -53,9 +46,10 @@ public class ExcelConversionMain {
 		File input = null;
 		File output = null;
 		ArrayList<File> list_input = new ArrayList<>();
+		ArrayList<File> list_output = new ArrayList<>();
 
-		String coding = "UTF-8";
 		int type_index = 0;
+		int file_type = 0;
 
 		if (args.length > 0) {
 			// 获取类型
@@ -78,9 +72,12 @@ public class ExcelConversionMain {
 						input = (new File(args[i + 1]));
 						list_input.add(input);
 						type_index = 1;
+						file_type = 1;
 					} else if (item.equals("-o")) {
 						output = new File(args[i + 1]);
-
+						list_output.add(output);
+						type_index = 1;
+						file_type = 2;
 					} else if (item.equals("-h")) {
 						System.out.println(app_help);
 					} else if (item.equals("-coding")) {
@@ -90,7 +87,11 @@ public class ExcelConversionMain {
 				case 1:
 					if (i < args.length - 1) {
 						if (!args[i + 1].startsWith("-")) {
-							list_input.add(new File(args[i + 1]));
+							if (file_type == 1) {
+								list_input.add(new File(args[i + 1]));
+							} else if (file_type == 2) {
+								list_output.add(new File(args[i + 1]));
+							}
 						} else {
 							type_index = 0;
 						}
@@ -178,11 +179,13 @@ public class ExcelConversionMain {
 					}
 
 					ArrayList<String> titles = new ArrayList<>();
-					titles.add("键");
+					titles.add("name");
 					for (int n = 0; n < list_input.size(); n++) {
 						String dirname = list_input.get(n).getParentFile().getName();
-						titles.add(dirname);
+						titles.add(getTitle(dirname, n));
 					}
+					titles.add("word_type");
+					titles.add("id");
 					ArrayList<ArrayList<String>> values = new ArrayList<>();
 					// 添加一行
 					Iterator iterator = list_mapstring.get(0).entrySet().iterator();
@@ -212,19 +215,70 @@ public class ExcelConversionMain {
 				}
 
 				break;
+			case "xmlListToXls":
+				xmlListToXls(list_input, output);
+				break;
 			case "xls2xml":
 				xlsToXml(input);
 				break;
 			case "xls2rc":
 				ArrayList<byte[]> listRC = xlsToRC(input,output);
-				
-				
+				break;
+			case "xlsToXmlList":
+				xlsToXmlList(input, list_output);
+				break;
 			default:
 				break;
 			}
 		} else {
-			System.out.println("风的影子制作，Excal与strings.xml互转工具，用于实现安卓多语言编辑");
 			System.out.println(app_help);
+		}
+	}
+
+	public static void xmlListToXls(ArrayList<File> xmlList, File output) {
+		try {
+			int total = 0;
+			ArrayList<String> titles = new ArrayList<>();
+			titles.add("name");
+			titles.add("key");
+			titles.add("translate");
+			titles.add("word_type");
+			titles.add("id");
+			ArrayList<ArrayList<String>> values = new ArrayList<>();
+			while (total < xmlList.size()) {
+				String text2 = null;
+				ArrayList<HashMap<String, String>> list_mapstring = new ArrayList<>();
+				for (int i = 0; i < 2; i++) {
+					text2 = readText(xmlList.get(total++), coding);
+					XmlToJson xmlToJson2 = new XmlToJson(text2);
+					list_mapstring.add(xmlToJson2.getHashList(coding));
+				}
+				// 添加一行
+				Iterator iterator = list_mapstring.get(0).entrySet().iterator();
+				while (iterator.hasNext()) {
+					Map.Entry entry = (Map.Entry) iterator.next();
+					String key = (String) entry.getKey();
+					String value = (String) entry.getValue();
+					ArrayList<String> item = new ArrayList<>();
+
+					item.add((String) key);
+					item.add((String) value);
+					for (int n = 1; n < list_mapstring.size(); n++) {
+						if (list_mapstring.get(n).get(key) != null) {
+							item.add(list_mapstring.get(n).get(key));
+						} else {
+							item.add("");
+						}
+					}
+
+					values.add(item);
+				}
+			}
+			HSSFWorkbook work = ExcelUtil.getHSSFWorkbook("item", titles, values, null);
+			work.write(output);
+
+		} catch (IOException e) {
+			e.printStackTrace();
 		}
 	}
 
@@ -233,10 +287,15 @@ public class ExcelConversionMain {
 		ArrayList<StringBuffer> list_xml = new ArrayList<>();
 		// list_xml.add(new StringBuffer());
 		String key = null;
+		String value = null;
+		StringBuffer buffer = new StringBuffer();
+		buffer.append(
+				"<?xml version=\"1.0\" encoding=\"utf-8\"?>\n<resources xmlns:tools=\"http://schemas.android.com/tools\">\r\n");
+		buffer.append("<resources>\r\n");
 		// 读取excel
 		try {
 			Workbook work = ExcelUtil.getWorkbook(xlsfile.getPath());
-			Sheet sheet = work.getSheet("item");
+			Sheet sheet = work.getSheetAt(0);
 			for (int iy = 1; iy < sheet.getLastRowNum(); iy++) {
 				Row row = sheet.getRow(iy);
 				for (int ix = 0; ix < row.getLastCellNum(); ix++) {
@@ -244,16 +303,9 @@ public class ExcelConversionMain {
 					if (ix == 0)
 						key = col.getStringCellValue();
 					// System.out.println(col.getStringCellValue());
-					if (ix >= 1) {
-						StringBuffer buffer = new StringBuffer();
-						buffer.append(
-								"<?xml version=\"1.0\" encoding=\"utf-8\"?>\n<resources xmlns:tools=\"http://schemas.android.com/tools\">\r\n");
-						String value = col.getStringCellValue();
-						if (ix >= list_xml.size()) {
-							list_xml.add(buffer);
-						}
-						StringBuffer tempbuffer = list_xml.get(ix - 1);
-						tempbuffer.append("    <string name=\"" + key + "\" >" + value + "</string>\r\n");
+					if (ix == 1) {
+						value = col.getStringCellValue();
+						buffer.append("    <string name=\"" + key + "\">" + value + "</string>\r\n");
 					}
 
 				}
@@ -284,6 +336,138 @@ public class ExcelConversionMain {
 
 				e.printStackTrace();
 			}
+		}
+	}
+
+	// 将xls内容替换到xml列表
+	public static void xlsToXmlList(File xlsfile, ArrayList<File> xmlList) {
+		ArrayList<StringBuffer> list_xml = new ArrayList<>();
+		String text2 = null;
+		// list_xml.add(new StringBuffer());
+		String key = null;
+		String value = null;
+		System.out.println("output number = " + xmlList.size());
+		// 读取excel
+		try {
+//			ArrayList<HashMap<String, String>> list_mapstring = new ArrayList<>();
+			ArrayList<ArrayList<StringEntry>> entryList = new ArrayList<>();
+			Map<String, String> mapOfXLS = new HashMap<>();
+			for (int i = 0; i < xmlList.size(); i++) {
+				text2 = readText(xmlList.get(i), coding);
+				XmlToJson xmlToJson2 = new XmlToJson(text2);
+//				list_mapstring.add(xmlToJson2.getHashList(coding));
+				entryList.add(xmlToJson2.getNodeList(coding));
+			}
+			Workbook work = ExcelUtil.getWorkbook(xlsfile.getPath());
+			Sheet sheet = work.getSheetAt(0);
+			for (int iy = 1; iy < sheet.getLastRowNum(); iy++) {
+				Row row = sheet.getRow(iy);
+				for (int ix = 0; ix < row.getLastCellNum(); ix++) {
+					Cell col = row.getCell(ix);
+					if (ix == 0)
+						key = col.getStringCellValue();
+					// System.out.println(col.getStringCellValue());
+					if (ix == 1) {
+						value = col.getStringCellValue();
+						if (null != key) {
+							mapOfXLS.put(key, value);
+						}
+					}
+
+				}
+				// System.out.println("----");
+			}
+
+			for (int i = 0; i < xmlList.size(); i++) {
+//				Map<String, String> mapOfXML = list_mapstring.get(i);
+				ArrayList<StringEntry> entryXML = entryList.get(i);
+				StringBuffer buffer = new StringBuffer();
+				buffer.append(
+						"<?xml version=\"1.0\" encoding=\"utf-8\"?>\n<resources xmlns:tools=\"http://schemas.android.com/tools\">\r\n");
+				String fileName = xmlList.get(i).getName();
+				if ("strings.xml".equals(fileName)) {
+					for (int j = 0; j < entryXML.size(); j++) {
+						StringEntry entry = entryXML.get(j);
+						String keyOfEntry = entry.getName();
+						String valueOfEntry = entry.getValue();
+						String tmp = mapOfXLS.get(valueOfEntry);
+//						if (null != tmp) {
+//							buffer.append("    <string name=\"" + keyOfEntry + "\">" + tmp + "</string>\r\n");
+//						}
+						value = (null == tmp) ? valueOfEntry : tmp;
+						buffer.append("    <string name=\"" + keyOfEntry + "\">" + value + "</string>\r\n");
+					}
+				} else if ("arrays.xml".equals(fileName)) {
+					for (int j = 0; j < entryXML.size(); j++) {
+						StringEntry entry = entryXML.get(j);
+						String keyOfEntry = entry.getName();
+						String valueOfEntry = entry.getValue();
+						if (!keyOfEntry.startsWith("__")) {
+							if (j != 0) {
+								buffer.append("    </string-array>\r\n");
+							}
+							buffer.append("    <string-array name=\"" + keyOfEntry + "\">\r\n");
+							continue;
+						}
+						String tmp = mapOfXLS.get(valueOfEntry);
+						value = (null == tmp || "".equals(tmp)) ? valueOfEntry : tmp;
+						buffer.append("        <item>" + value + "</item>\r\n");
+					}
+					buffer.append("    </string-array>\r\n");
+				}
+//				for (String keyOfMap : mapOfXML.keySet()) {
+//					String valueOfMap = mapOfXML.get(keyOfMap);
+//					String tmp = mapOfXLS.get(valueOfMap);
+//					value = (null == tmp) ? valueOfMap : tmp;
+//					buffer.append("    <string name=\"" + keyOfMap + "\">" + value + "</string>\r\n");
+//				}
+				buffer.append("</resources>");
+				list_xml.add(buffer);
+			}
+
+		} catch (EncryptedDocumentException e) {
+
+			e.printStackTrace();
+		} catch (InvalidFormatException e) {
+
+			e.printStackTrace();
+		} catch (IOException e) {
+
+			e.printStackTrace();
+		}
+
+		for (int i = 0; i < list_xml.size(); i++) {
+			System.out.println(list_xml.get(i).toString());
+			// 依次写入文件
+			try {
+				String fileName = xmlList.get(i).getName();
+				System.out.println("正在写入第" + i + "个文件: " + fileName);
+				if ("strings.xml".equals(fileName)) {
+					saveText(new File(xmlList.get(i).getParent(), "strings_change.xml"), list_xml.get(i).toString(), "UTF-8");
+				} else if ("arrays.xml".equals(fileName)) {
+					saveText(new File(xmlList.get(i).getParent(), "arrays_change.xml"), list_xml.get(i).toString(), "UTF-8");
+				}
+			} catch (UnsupportedEncodingException e) {
+
+				e.printStackTrace();
+			} catch (IOException e) {
+
+				e.printStackTrace();
+			}
+		}
+	}
+
+	public static void mergeXls(File[] inputList, File output) throws IOException {
+
+	}
+
+	public static String getTitle(String dirname, int i) {
+		if ("values".equals(dirname) && i == 0) {
+			return "key";
+		} else if (dirname.startsWith("values")){
+			return "translate";
+		} else {
+			return dirname;
 		}
 	}
 	
