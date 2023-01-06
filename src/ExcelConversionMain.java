@@ -5,6 +5,7 @@ import java.util.*;
 import javax.swing.UIManager;
 
 import com.xl.model.StringEntry;
+import com.xl.util.*;
 import org.apache.commons.compress.archivers.dump.InvalidFormatException;
 import org.apache.poi.EncryptedDocumentException;
 import org.apache.poi.hssf.usermodel.HSSFWorkbook;
@@ -13,18 +14,15 @@ import org.apache.poi.ss.formula.EvaluationWorkbook;
 import org.apache.poi.ss.formula.udf.UDFFinder;
 import org.apache.poi.ss.usermodel.*;
 import org.apache.poi.ss.util.CellAddress;
+import org.json.JSONArray;
 import org.json.JSONException;
 import org.json.JSONObject;
 
-import com.xl.util.ClipBoard;
-import com.xl.util.ExcelUtil;
-import com.xl.util.FileUtils;
-import com.xl.util.UIUtil;
-import com.xl.util.XmlToJson;
 import com.xl.window.JSONToCodeWindow;
 
 public class ExcelConversionMain {
-	static String url = "https://github.com/fengdeyingzi/ExcelConversion.git";
+	static boolean mDebugFlag = false;
+	static String url = "https://github.com/destinylemon/ExcelConversion";
 	static String coding = "UTF-8";
 	static String app_help = "控制台支持以下命令\n  -t 判断输入的类型 取值如下\n" + "    xmlToJson 将xml转json\n" + "    xml2xls 将xml转xls\n"
 			+ "    xls2xml 将xls转xml\n"+ "    xls2rc 将xls转rc文件\n" + " -i 输入的文件\n" + " -o 输出的文件\n" + " -coding 文件的文本编码 默认utf-8\n" + "开源地址：" + url;
@@ -137,12 +135,12 @@ public class ExcelConversionMain {
 			}
 
 			if (output == null) {
-				// System.out.println("input unknoen,please output -o.");
-				if (type.equals("xmlToJson"))
-					output = new File(input.getParentFile(), input.getName() + ".json");
-				if (type.equals("xml2xls")) {
-					output = new File(input.getParentFile(), input.getName() + ".xls");
-				}
+				System.out.println("input unknoen,please output -o.");
+//				if (type.equals("xmlToJson"))
+//					output = new File(input.getParentFile(), input.getName() + ".json");
+//				if (type.equals("xml2xls")) {
+//					output = new File(input.getParentFile(), input.getName() + ".xls");
+//				}
 			}
 
 			switch (type) {
@@ -227,6 +225,21 @@ public class ExcelConversionMain {
 			case "xlsToXmlList":
 				xlsToXmlList(input, list_output);
 				break;
+			case "jsToJson":
+				jsToJson(list_input);
+				break;
+			case "jsListToXls":
+				jsListToXls(list_input, output);
+				break;
+			case "jsonListToXls":
+				jsonListToXls(list_input, output);
+				break;
+			case "xlsToJsList":
+				xlsToJsList(input, list_output);
+				break;
+			case "xlsToJsonList":
+				xlsToJsonList(input, list_output);
+				break;
 			default:
 				break;
 			}
@@ -235,11 +248,392 @@ public class ExcelConversionMain {
 		}
 	}
 
+	public static void xlsToJsonList(File xlsfile, ArrayList<File> jsonList) {
+		ArrayList<StringBuffer> list_js = new ArrayList<>();
+		String text2 = null;
+		String key = null;
+		String value = null;
+		// 读取excel
+		try {
+			ArrayList<ArrayList<StringEntry>> entryList = new ArrayList<>();
+			Map<String, String> mapOfXLS = new HashMap<>();
+			for (int i = 0; i < jsonList.size(); i++) {
+				text2 = readText(jsonList.get(i), coding);
+				ArrayList<StringEntry> entries = new ArrayList<>();
+				JSONObject jsonObject = new JSONObject(text2);
+				int arrayIndex = 0;
+				for (String keyOfJson : jsonObject.keySet()) {
+					Object valueOfJson = jsonObject.get(keyOfJson);
+					if (valueOfJson instanceof String) {
+						entries.add(new StringEntry(keyOfJson, (String) valueOfJson));
+					} else if (valueOfJson instanceof JSONArray) {
+						arrayIndex = 0;
+						Iterator iterator = ((JSONArray) valueOfJson).iterator();
+						while (iterator.hasNext()) {
+							String valueOfArray = (String) iterator.next();
+							entries.add(new StringEntry("__" + keyOfJson + "__" + (arrayIndex++), valueOfArray));
+						}
+					}
+				}
+				entryList.add(entries);
+			}
+			Workbook work = ExcelUtil.getWorkbook(xlsfile.getPath());
+			Sheet sheet = work.getSheetAt(0);
+			for (int iy = 1; iy < sheet.getLastRowNum(); iy++) {
+				Row row = sheet.getRow(iy);
+				for (int ix = 0; ix < row.getLastCellNum(); ix++) {
+					Cell col = row.getCell(ix);
+					if (ix == 0)
+						key = col.getStringCellValue();
+					if (ix == 1) {
+						value = col.getStringCellValue();
+						if (null != key) {
+							mapOfXLS.put(key, value);
+						}
+					}
+
+				}
+			}
+
+			for (int i = 0; i < jsonList.size(); i++) {
+				ArrayList<StringEntry> entryJs = entryList.get(i);
+				StringBuffer buffer = new StringBuffer();
+//				buffer.append(
+//						"var str = '<script language=\"javascript\" src=\"..\\/note\\/Note_CHINESE_S.js?ver='+web_version+'\"><\\/script>'; \n" +
+//								"document.write(str);");
+				buffer.append("{\n");
+				boolean arrayFlag = false;
+				for (int j = 0; j < entryJs.size(); j++) {
+					StringEntry entry = entryJs.get(j);
+					key = entry.getName();
+					value = entry.getValue();
+					String valueOfXLS = mapOfXLS.get(value);
+					value = (null == valueOfXLS || "".equals(valueOfXLS)) ? value : valueOfXLS;
+					if (key.startsWith("__")) {
+						arrayFlag = true;
+						if (key.endsWith("__0")) {
+							int index = key.lastIndexOf("__");
+							key = key.substring(2, index);
+							buffer.append("		\"").append(key).append("\" : [\"").append(JsToJson.exStringToJS(value)).append("\"");
+						} else {
+							buffer.append(", \"").append(JsToJson.exStringToJS(value)).append("\"");
+						}
+						if (j == entryJs.size() - 1) {
+							buffer.append("]\n");
+						}
+						continue;
+					}
+					if (arrayFlag) {
+						arrayFlag = false;
+						buffer.append("]");
+						if (j != entryJs.size() - 1) {
+							buffer.append(",\n");
+						} else {
+							buffer.append("\n");
+						}
+					}
+					buffer.append("		\"").append(key).append("\" : \"").append(JsToJson.exStringToJS(value)).append("\"");
+					if (j != entryJs.size() - 1) {
+						buffer.append(",\n");
+					} else {
+						buffer.append("\n");
+					}
+				}
+				buffer.append("}\n");
+				list_js.add(buffer);
+			}
+
+		} catch (EncryptedDocumentException e) {
+
+			e.printStackTrace();
+		} catch (InvalidFormatException e) {
+
+			e.printStackTrace();
+		} catch (IOException e) {
+
+			e.printStackTrace();
+		}
+
+		for (int i = 0; i < list_js.size(); i++) {
+			if (mDebugFlag) {
+				System.out.println(list_js.get(i).toString());
+			}
+			// 依次写入文件
+			try {
+				System.out.println("正在写入第" + i + "个文件: " + jsonList.get(i).getParent() + "\\LANG_CHANGE.json");
+				saveText(new File(jsonList.get(i).getParent(), "LANG_CHANGE.json"), list_js.get(i).toString(), "UTF-8");
+			} catch (UnsupportedEncodingException e) {
+
+				e.printStackTrace();
+			} catch (IOException e) {
+
+				e.printStackTrace();
+			}
+		}
+	}
+
+	public static void xlsToJsList(File xlsfile, ArrayList<File> jsList) {
+		ArrayList<StringBuffer> list_js = new ArrayList<>();
+		String text2 = null;
+		String key = null;
+		String value = null;
+		// 读取excel
+		try {
+			ArrayList<ArrayList<StringEntry>> entryList = new ArrayList<>();
+			Map<String, String> mapOfXLS = new HashMap<>();
+			for (int i = 0; i < jsList.size(); i++) {
+				text2 = readText(jsList.get(i), coding);
+				JsToJson jsToJson = new JsToJson(text2);
+				String buffer = jsToJson.listNames();
+				ArrayList<StringEntry> entries = new ArrayList<>();
+				JSONObject jsonObject = new JSONObject(buffer);
+				int arrayIndex = 0;
+				for (String keyOfJson : jsonObject.keySet()) {
+					Object valueOfJson = jsonObject.get(keyOfJson);
+					if (valueOfJson instanceof String) {
+						entries.add(new StringEntry(keyOfJson, (String) valueOfJson));
+					} else if (valueOfJson instanceof JSONArray) {
+						arrayIndex = 0;
+						Iterator iterator = ((JSONArray) valueOfJson).iterator();
+						while (iterator.hasNext()) {
+							String valueOfArray = (String) iterator.next();
+							entries.add(new StringEntry("__" + keyOfJson + "__" + (arrayIndex++), valueOfArray));
+						}
+					}
+				}
+				entryList.add(entries);
+			}
+			Workbook work = ExcelUtil.getWorkbook(xlsfile.getPath());
+			Sheet sheet = work.getSheetAt(0);
+			for (int iy = 1; iy < sheet.getLastRowNum(); iy++) {
+				Row row = sheet.getRow(iy);
+				for (int ix = 0; ix < row.getLastCellNum(); ix++) {
+					Cell col = row.getCell(ix);
+					if (ix == 0)
+						key = col.getStringCellValue();
+					if (ix == 1) {
+						value = col.getStringCellValue();
+						if (null != key) {
+							mapOfXLS.put(key, value);
+						}
+					}
+
+				}
+			}
+
+			for (int i = 0; i < jsList.size(); i++) {
+				ArrayList<StringEntry> entryJs = entryList.get(i);
+				StringBuffer buffer = new StringBuffer();
+//				buffer.append(
+//						"var str = '<script language=\"javascript\" src=\"..\\/note\\/Note_CHINESE_S.js?ver='+web_version+'\"><\\/script>'; \n" +
+//								"document.write(str);");
+				boolean arrayFlag = false;
+				for (int j = 0; j < entryJs.size(); j++) {
+					StringEntry entry = entryJs.get(j);
+					key = entry.getName();
+					value = entry.getValue();
+					String valueOfXLS = mapOfXLS.get(value);
+					value = (null == valueOfXLS || "".equals(valueOfXLS)) ? value : valueOfXLS;
+					if (key.startsWith("__")) {
+						arrayFlag = true;
+						if (key.endsWith("__0")) {
+							int index = key.lastIndexOf("__");
+							key = key.substring(2, index);
+							buffer.append(key).append(" = [\"").append(JsToJson.exStringToJS(value)).append("\"");
+						} else {
+							buffer.append(", \"").append(JsToJson.exStringToJS(value)).append("\"");
+						}
+						continue;
+					}
+					if (arrayFlag) {
+						arrayFlag = false;
+						buffer.append("]\n");
+					}
+					buffer.append(key).append(" = \"").append(JsToJson.exStringToJS(value)).append("\"\n");
+				}
+				list_js.add(buffer);
+			}
+
+		} catch (EncryptedDocumentException e) {
+
+			e.printStackTrace();
+		} catch (InvalidFormatException e) {
+
+			e.printStackTrace();
+		} catch (IOException e) {
+
+			e.printStackTrace();
+		}
+
+		for (int i = 0; i < list_js.size(); i++) {
+			if (mDebugFlag) {
+				System.out.println(list_js.get(i).toString());
+			}
+			// 依次写入文件
+			try {
+				System.out.println("正在写入第" + i + "个文件: " + jsList.get(i).getParent() + "\\LANG_CHANGE.js");
+				saveText(new File(jsList.get(i).getParent(), "LANG_CHANGE.js"), list_js.get(i).toString(), "UTF-8");
+			} catch (UnsupportedEncodingException e) {
+
+				e.printStackTrace();
+			} catch (IOException e) {
+
+				e.printStackTrace();
+			}
+		}
+	}
+
+	public static void jsonListToXls(ArrayList<File> jsonList, File output) {
+		try {
+			int total = 0;
+			ArrayList<String> titles = new ArrayList<>();
+//			titles.add("name");
+			titles.add("key");
+			titles.add("translate");
+			titles.add("word_type");
+			titles.add("id");
+			ArrayList<ArrayList<String>> values = new ArrayList<>();
+			while (total < jsonList.size()) {
+				ArrayList<HashMap<String, String>> list_mapstring = new ArrayList<>();
+				for (int i = 0; i < 2; i++) {
+					String text = readText(jsonList.get(total++), coding);
+					HashMap<String, String> hashMap = new HashMap<>();
+					JSONObject jsonObject = new JSONObject(text);
+					int arrayIndex = 0;
+					for (String key : jsonObject.keySet()) {
+						Object value = jsonObject.get(key);
+						if (value instanceof String) {
+							hashMap.put(key, (String) value);
+						} else if (value instanceof JSONArray) {
+							arrayIndex = 0;
+							Iterator iterator = ((JSONArray) value).iterator();
+							while (iterator.hasNext()) {
+								String valueOfArray = (String) iterator.next();
+								hashMap.put(key + "__" + (arrayIndex++), valueOfArray);
+							}
+						}
+					}
+					list_mapstring.add(hashMap);
+				}
+
+				// 添加一行
+				Iterator iterator = list_mapstring.get(0).entrySet().iterator();
+				while (iterator.hasNext()) {
+					Map.Entry entry = (Map.Entry) iterator.next();
+					String key = (String) entry.getKey();
+					String value = (String) entry.getValue();
+					ArrayList<String> item = new ArrayList<>();
+
+//					item.add((String) key);
+					item.add((String) XmlToJson.exStringToJSON(value));
+					for (int n = 1; n < list_mapstring.size(); n++) {
+						if (list_mapstring.get(n).get(key) != null) {
+							item.add(list_mapstring.get(n).get(key));
+						} else {
+							item.add("");
+						}
+					}
+
+					values.add(item);
+				}
+			}
+
+			HSSFWorkbook work = ExcelUtil.getHSSFWorkbook("item", titles, values, null);
+			work.write(output);
+
+		} catch (IOException exception) {
+			exception.printStackTrace();
+		}
+	}
+
+	public static void jsListToXls(ArrayList<File> jsList, File output) {
+		try {
+			int total = 0;
+			ArrayList<String> titles = new ArrayList<>();
+//			titles.add("name");
+			titles.add("key");
+			titles.add("translate");
+			titles.add("word_type");
+			titles.add("id");
+			ArrayList<ArrayList<String>> values = new ArrayList<>();
+			while (total < jsList.size()) {
+				ArrayList<HashMap<String, String>> list_mapstring = new ArrayList<>();
+				for (int i = 0; i < 2; i++) {
+					String text = readText(jsList.get(total++), coding);
+					JsToJson jsToJson = new JsToJson(text);
+					String buffer = jsToJson.listNames();
+//					System.out.println(buffer);
+//					System.out.println(jsList.get(total - 1).getParent());
+//					saveText(new File(jsList.get(total - 1).getParent(), "LAN__" + (total - 1) + ".json"), buffer, "UTF-8");
+					HashMap<String, String> hashMap = new HashMap<>();
+//				saveText(new File(jsList.get(i).getParent(), "LAN_" + i + ".json"), buffer, "UTF-8");
+					JSONObject jsonObject = new JSONObject(buffer);
+					int arrayIndex = 0;
+					for (String key : jsonObject.keySet()) {
+						Object value = jsonObject.get(key);
+						if (value instanceof String) {
+							hashMap.put(key, (String) value);
+						} else if (value instanceof JSONArray) {
+							arrayIndex = 0;
+							Iterator iterator = ((JSONArray) value).iterator();
+							while (iterator.hasNext()) {
+								String valueOfArray = (String) iterator.next();
+								hashMap.put(key + "__" + (arrayIndex++), valueOfArray);
+							}
+						}
+					}
+					list_mapstring.add(hashMap);
+				}
+
+				// 添加一行
+				Iterator iterator = list_mapstring.get(0).entrySet().iterator();
+				while (iterator.hasNext()) {
+					Map.Entry entry = (Map.Entry) iterator.next();
+					String key = (String) entry.getKey();
+					String value = (String) entry.getValue();
+					ArrayList<String> item = new ArrayList<>();
+
+//					item.add((String) key);
+					item.add((String) XmlToJson.exStringToJSON(value));
+					for (int n = 1; n < list_mapstring.size(); n++) {
+						if (list_mapstring.get(n).get(key) != null) {
+							item.add(list_mapstring.get(n).get(key));
+						} else {
+							item.add("");
+						}
+					}
+
+					values.add(item);
+				}
+			}
+
+			HSSFWorkbook work = ExcelUtil.getHSSFWorkbook("item", titles, values, null);
+			work.write(output);
+
+		} catch (IOException exception) {
+			exception.printStackTrace();
+		}
+	}
+
+	public static void jsToJson(ArrayList<File> jsList) {
+		try {
+			int i = 0;
+			for (File file : jsList) {
+				String text = readText(file, coding);
+				JsToJson jsToJson = new JsToJson(text);
+				String buffer = jsToJson.listNames();
+				saveText(new File(file.getParent(), "LAN_" + (i++) + ".json"), buffer, "UTF-8");
+			}
+		} catch (IOException exception) {
+			exception.printStackTrace();
+		}
+	}
+
 	public static void xmlListToXls(ArrayList<File> xmlList, File output) {
 		try {
 			int total = 0;
 			ArrayList<String> titles = new ArrayList<>();
-			titles.add("name");
+//			titles.add("name");
 			titles.add("key");
 			titles.add("translate");
 			titles.add("word_type");
@@ -261,7 +655,7 @@ public class ExcelConversionMain {
 					String value = (String) entry.getValue();
 					ArrayList<String> item = new ArrayList<>();
 
-					item.add((String) key);
+//					item.add((String) key);
 					item.add((String) value);
 					for (int n = 1; n < list_mapstring.size(); n++) {
 						if (list_mapstring.get(n).get(key) != null) {
@@ -346,7 +740,6 @@ public class ExcelConversionMain {
 		// list_xml.add(new StringBuffer());
 		String key = null;
 		String value = null;
-		System.out.println("output number = " + xmlList.size());
 		// 读取excel
 		try {
 //			ArrayList<HashMap<String, String>> list_mapstring = new ArrayList<>();
@@ -391,36 +784,56 @@ public class ExcelConversionMain {
 						String keyOfEntry = entry.getName();
 						String valueOfEntry = entry.getValue();
 						String tmp = mapOfXLS.get(valueOfEntry);
-//						if (null != tmp) {
-//							buffer.append("    <string name=\"" + keyOfEntry + "\">" + tmp + "</string>\r\n");
-//						}
-						value = (null == tmp) ? valueOfEntry : tmp;
-						buffer.append("    <string name=\"" + keyOfEntry + "\">" + value + "</string>\r\n");
+						if (null != tmp && !"".equals(tmp)) {
+							buffer.append("    <string name=\"" + keyOfEntry + "\">" + XmlToJson.toNodeEscape(tmp) + "</string>\r\n");
+						}
+//						value = (null == tmp) ? valueOfEntry : tmp;
+//						buffer.append("    <string name=\"" + keyOfEntry + "\">" + value + "</string>\r\n");
 					}
 				} else if ("arrays.xml".equals(fileName)) {
+					int arrayType = 0;
+					int pArrayType = 0;
 					for (int j = 0; j < entryXML.size(); j++) {
 						StringEntry entry = entryXML.get(j);
 						String keyOfEntry = entry.getName();
 						String valueOfEntry = entry.getValue();
+						arrayType = entry.getArrayType();
 						if (!keyOfEntry.startsWith("__")) {
 							if (j != 0) {
-								buffer.append("    </string-array>\r\n");
+								if (pArrayType == 1) {
+									buffer.append("    </string-array>\r\n");
+								} else if (pArrayType == 2) {
+									buffer.append("    </integer-array>\r\n");
+								} else if (pArrayType == 0) {
+									buffer.append("    </array>\r\n");
+								}
 							}
-							buffer.append("    <string-array name=\"" + keyOfEntry + "\">\r\n");
+							if (arrayType == 1) {
+								buffer.append("    <string-array name=\"" + keyOfEntry + "\">\r\n");
+							} else if (arrayType == 2) {
+								buffer.append("    <integer-array name=\"" + keyOfEntry + "\">\r\n");
+							} else if (arrayType == 0) {
+								buffer.append("    <array name=\"" + keyOfEntry + "\">\r\n");
+							} else if (arrayType == 3) {
+								String tmp = mapOfXLS.get(valueOfEntry);
+								value = (null == tmp || "".equals(tmp)) ? valueOfEntry : tmp;
+								buffer.append("		<integer name=\"" + keyOfEntry + "\">" + XmlToJson.toNodeEscape(value) + "</integer>\r\n");
+							}
+							pArrayType = arrayType;
 							continue;
 						}
 						String tmp = mapOfXLS.get(valueOfEntry);
 						value = (null == tmp || "".equals(tmp)) ? valueOfEntry : tmp;
-						buffer.append("        <item>" + value + "</item>\r\n");
+						buffer.append("        <item>" + XmlToJson.toNodeEscape(value) + "</item>\r\n");
 					}
-					buffer.append("    </string-array>\r\n");
+					if (pArrayType == 1) {
+						buffer.append("    </string-array>\r\n");
+					} else if (pArrayType == 2) {
+						buffer.append("    </integer-array>\r\n");
+					} else if (pArrayType == 0){
+						buffer.append("    </array>\r\n");
+					}
 				}
-//				for (String keyOfMap : mapOfXML.keySet()) {
-//					String valueOfMap = mapOfXML.get(keyOfMap);
-//					String tmp = mapOfXLS.get(valueOfMap);
-//					value = (null == tmp) ? valueOfMap : tmp;
-//					buffer.append("    <string name=\"" + keyOfMap + "\">" + value + "</string>\r\n");
-//				}
 				buffer.append("</resources>");
 				list_xml.add(buffer);
 			}
@@ -437,14 +850,17 @@ public class ExcelConversionMain {
 		}
 
 		for (int i = 0; i < list_xml.size(); i++) {
-			System.out.println(list_xml.get(i).toString());
+			if (mDebugFlag) {
+				System.out.println(list_xml.get(i).toString());
+			}
 			// 依次写入文件
 			try {
 				String fileName = xmlList.get(i).getName();
-				System.out.println("正在写入第" + i + "个文件: " + fileName);
 				if ("strings.xml".equals(fileName)) {
+					System.out.println("正在写入第" + i + "个文件: " + xmlList.get(i).getParent() + "\\strings_change.xml");
 					saveText(new File(xmlList.get(i).getParent(), "strings_change.xml"), list_xml.get(i).toString(), "UTF-8");
 				} else if ("arrays.xml".equals(fileName)) {
+					System.out.println("正在写入第" + i + "个文件: " + xmlList.get(i).getParent() + "\\arrays_change.xml");
 					saveText(new File(xmlList.get(i).getParent(), "arrays_change.xml"), list_xml.get(i).toString(), "UTF-8");
 				}
 			} catch (UnsupportedEncodingException e) {

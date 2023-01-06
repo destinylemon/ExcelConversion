@@ -237,9 +237,11 @@ public class JSONObject {
             
             if (key != null) {
                 // Check if key exists
+                // 同样的key以后插入的数据为准
                 if (this.opt(key) != null) {
                     // key already exists
-                    throw x.syntaxError("Duplicate key \"" + key + "\"");
+//                    throw x.syntaxError("Duplicate key \"" + key + "\"");
+                    System.out.println("Warning: " + "Duplicate key \"" + key + "\"");
                 }
                 // Only add value if non-null
                 Object value = x.nextValue();

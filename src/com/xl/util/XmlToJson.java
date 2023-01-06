@@ -153,7 +153,7 @@ public class XmlToJson {
 
 
     //将文字进行处理 主要是处理转义字符
-    String toEscape(String text) {
+    public static String toHashEscape(String text) {
         StringBuffer buffer = new StringBuffer();
         int type = 0;
         for (int i = 0; i < text.length(); i++) {
@@ -162,12 +162,6 @@ public class XmlToJson {
                 case 0:
                     if (c == '\\') {
                         type = 1;
-                    } else if (c == '\"') {
-                        type = 2;
-                    } else if (c == '<') {
-                        buffer.append("&lt;");
-                    } else if (c == '&') {
-                        buffer.append("&amp;");
                     } else {
                         buffer.append(c);
                     }
@@ -198,8 +192,27 @@ public class XmlToJson {
         return buffer.toString();
     }
 
+    public static String toNodeEscape(String text) {
+        StringBuffer buffer = new StringBuffer();
+        for (int i = 0; i < text.length(); i++) {
+            char c = text.charAt(i);
+            if (c == '\'') {
+                buffer.append("\\'");
+            } else if (c == '<') {
+                buffer.append("&lt;");
+            } else if (c == '&') {
+                buffer.append("&amp;");
+            } else {
+                buffer.append(c);
+            }
+
+        }
+
+        return buffer.toString();
+    }
+
     //转换string.xml里的转义字符为json
-    String exStringToJSON(String text) {
+    public static String exStringToJSON(String text) {
         StringBuffer buffer = new StringBuffer();
         int type = 0;
         for (int i = 0; i < text.length(); i++) {
@@ -330,7 +343,7 @@ public class XmlToJson {
             if (book.getNodeType() == Node.ELEMENT_NODE) {
                 // 判断是否是元素节点
                 Element element = (Element) book;
-                if ("string-array".equals(element.getNodeName()) || "integer-array".equals(element.getNodeName())) {
+                if ("string-array".equals(element.getNodeName()) || "integer-array".equals(element.getNodeName()) || "array".equals(element.getNodeName())) {
                     arrayIndex = 0;
                     arrayName = element.getAttribute("name");
                     NodeList itemList = book.getChildNodes();
@@ -339,11 +352,11 @@ public class XmlToJson {
                         if (!"item".equals(item.getNodeName()) || "".equals(item.getTextContent()) || null == item.getTextContent()) {
                             continue;
                         }
-                        if (book.getTextContent().startsWith("@string")) {
+                        if (item.getTextContent().startsWith("@")) {
                             arrayIndex++;
                             continue;
                         }
-                        hashmap.put(arrayName + "__" + (arrayIndex++), toEscape(item.getTextContent()));
+                        hashmap.put(arrayName + "__" + (arrayIndex++), toHashEscape(item.getTextContent()));
                     }
                     continue;
                 }
@@ -356,7 +369,7 @@ public class XmlToJson {
                         //获取具体的某个属性节点
                         Attr attr = (Attr) namenm.item(k);
                         if (attr.getNodeName().equals("name")) {
-                            hashmap.put(attr.getNodeValue(), toEscape(book.getTextContent()));
+                            hashmap.put(attr.getNodeValue(), toHashEscape(book.getTextContent()));
                         }
                     }
                 }
@@ -400,21 +413,29 @@ public class XmlToJson {
             if (book.getNodeType() == Node.ELEMENT_NODE) {
                 // 判断是否是元素节点
                 Element element = (Element) book;
-                if ("string-array".equals(element.getNodeName()) || "integer-array".equals(element.getNodeName())) {
+                if ("string-array".equals(element.getNodeName()) || "integer-array".equals(element.getNodeName()) || "array".equals(element.getNodeName())) {
+                    int arrayType = -1;
+                    if ("string-array".equals(element.getNodeName())) {
+                        arrayType = 1;
+                    } else if ("integer-array".equals(element.getNodeName())) {
+                        arrayType = 2;
+                    } else {
+                        arrayType = 0;
+                    }
                     arrayIndex = 0;
                     arrayName = element.getAttribute("name");
-                    entries.add(new StringEntry(arrayName, ""));
+                    entries.add(new StringEntry(arrayName, "", arrayType));
                     NodeList itemList = book.getChildNodes();
                     for (int j = 0; j < itemList.getLength(); j++) {
                         Node item = itemList.item(j);
                         if (!"item".equals(item.getNodeName()) || "".equals(item.getTextContent()) || null == item.getTextContent()) {
                             continue;
                         }
-//                        if (book.getTextContent().startsWith("@string")) {
+//                        if (item.getTextContent().startsWith("@string")) {
 //                            arrayIndex++;
 //                            continue;
 //                        }
-                        entries.add(new StringEntry("__" + arrayName + (arrayIndex++), toEscape(item.getTextContent())));
+                        entries.add(new StringEntry("__" + arrayName + (arrayIndex++), toHashEscape(item.getTextContent()), arrayType));
                     }
                     continue;
                 }
@@ -427,7 +448,11 @@ public class XmlToJson {
                         //获取具体的某个属性节点
                         Attr attr = (Attr) namenm.item(k);
                         if (attr.getNodeName().equals("name")) {
-                            entries.add(new StringEntry(attr.getNodeValue(), toEscape(book.getTextContent())));
+                            int arrayType = 4;
+                            if ("integer".equals(element.getNodeName())) {
+                                arrayType = 3;
+                            }
+                            entries.add(new StringEntry(attr.getNodeValue(), toHashEscape(book.getTextContent()), arrayType));
                         }
                     }
                 }
