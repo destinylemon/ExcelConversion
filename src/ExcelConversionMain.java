@@ -25,21 +25,14 @@ public class ExcelConversionMain {
 	static String url = "https://github.com/destinylemon/ExcelConversion";
 	static String coding = "UTF-8";
 	static String app_help = "控制台支持以下命令\n  -t 判断输入的类型 取值如下\n" + "    xmlToJson 将xml转json\n" + "    xml2xls 将xml转xls\n"
-			+ "    xls2xml 将xls转xml\n"+ "    xls2rc 将xls转rc文件\n" + " -i 输入的文件\n" + " -o 输出的文件\n" + " -coding 文件的文本编码 默认utf-8\n" + "开源地址：" + url;
+			+ "    xls2xml 将xls转xml\n"+ "    xls2rc 将xls转rc文件\n" + "    xmlListToXls 将xml列表转换为xls\n" + "    jsListToXls 将js列表转换为xls\n"
+			+ "    jsonListToXls 将json列表转换为xls\n" + "    xlsToXmlList 将xls转换为xml列表\n" + "    xlsToJsList 将xls转换为js列表\n"
+			+ "    xlsToJsonList 将xls转换为json列表\n" + "    jsToJson 将js转换为json\n"
+			+ " -i 输入的文件\n" + " -o 输出的文件\n" + " -coding 文件的文本编码 默认utf-8\n" + "开源地址：" + url;
 
-	/*
-	 * -t 判断输入的类型 取值如下 xmlToJson 将xml转json xml2xls 将xml转xls xls2xml 将xls转xml -f
-	 * 输入的文件 -o 输出的文件 -coding 文件的文本编码 默认utf-8
-	 */
 	public static void main(String[] args) {
 		UIUtil.setWindowsStyle();// 设置windows风格
 
-		/*
-		 * if(args.length==0){ System.out.println("输入内容为空"); String test =
-		 * "-t xml2xls -i D:\\strings.xml D:\\strings_en.xml -o D:\\test.xls -coding UTF-8"
-		 * ; args = test.split(" "); }
-		 */
-		// File file = null;
 		String type = null;
 		File input = null;
 		File output = null;
@@ -104,25 +97,6 @@ public class ExcelConversionMain {
 					break;
 				}
 
-				/*
-				 * switch (item) { case "-t": type = args[i+1]; break; case
-				 * "-f": file = new File(args[i+1]); break; case "-i":
-				 * 
-				 * input = (new File(args[i+1]));
-				 * 
-				 * break; case "-o":
-				 * 
-				 * output = new File(args[i+1]);
-				 * 
-				 * 
-				 * break; case "-h": System.out.println("  -t 判断输入的类型 取值如下\n"+
-				 * "    xmlToJson 将xml转json\n"+ "    xml2xls 将xml转xls\n"+
-				 * "    xls2xml 将xls转xml\n"+ " -f 输入的文件\n"+ " -o 输出的文件\n"+
-				 * " -coding 文件的文本编码 默认utf-8"); break; case "-coding": coding =
-				 * args[i+1]; break;
-				 * 
-				 * default: break; }
-				 */
 			}
 			//
 			if (type == null) {
@@ -136,11 +110,6 @@ public class ExcelConversionMain {
 
 			if (output == null) {
 				System.out.println("input unknoen,please output -o.");
-//				if (type.equals("xmlToJson"))
-//					output = new File(input.getParentFile(), input.getName() + ".json");
-//				if (type.equals("xml2xls")) {
-//					output = new File(input.getParentFile(), input.getName() + ".xls");
-//				}
 			}
 
 			switch (type) {

@@ -31,73 +31,11 @@ import java.util.HashMap;
 import java.util.Map;
 
 public class XmlToJson {
-    public static String filename = "/mnt/sdcard/.aide/1.xml";
 
-
-    private File file1, file2;
     private String text;
-
 
     public XmlToJson(String text) {
         this.text = text;
-	/*
-	DocumentBuilderFactory domfac = DocumentBuilderFactory.newInstance();   
-	try
-	{   
-
-	DocumentBuilder domBuilder = domfac.newDocumentBuilder();   
-	InputStream is = new FileInputStream(new File(filename));   
-	InputStream strin = new FileInputStream(file1);
-
-	Document doc = domBuilder.parse(strin);   
-
-	Element root = doc.getDocumentElement();  
-	System.out.println("tagname "+root.getTagName());
-	NodeList books = root.getChildNodes();   
-	if(books!=null){   
-	for (int i = 0; i < books.getLength(); i++) 
-	{   
-	Node book = books.item(i);  
-	listNodes(book);
-/*
-	if(book.getNodeType()==Node.ELEMENT_NODE) {   
-	//（7）取得节点的属性值   
-	//String email=book.getAttributes().getNamedItem("email").getNodeValue();   
-	//System.out.println(email);   
-	//注意，节点的属性也是它的子节点。它的节点类型也是Node.ELEMENT_NODE   
-
-	//（8）轮循子节点   
-	for(Node node=book.getFirstChild();node!=null;node=node.getNextSibling()) {   
-	if(node.getNodeType()==Node.ELEMENT_NODE) {   
-	//大括号<>
-	if(node.getNodeName().equals("name")) 
-	{   
-	String name=node.getNodeValue();   
-	String name1=node.getFirstChild().getNodeValue();   
-	System.out.println(name);   
-	System.out.println(name1);   
-	}   
-	if(node.getNodeName().equals("price")) {   
-	String price=node.getFirstChild().getNodeValue();   
-	System.out.println(price);   
-	}   
-	
-	}   
-	}  
-	}   *
-	}  
-	}   
-	}
-	catch(SAXException e)
-	{
-	e.printStackTrace();
-	}
-	catch (Exception e)
-	{   
-	// TODO Auto-generated catch block   
-	e.printStackTrace();   
-	}   
-*/
     }
 
     //检测并输出json
@@ -760,15 +698,5 @@ public class XmlToJson {
                 new File("src//c.xml")));
     }
 
-}  
-
-	/*
-	<?xml version="1.0" encoding="GB2312" standalone="no"?>  
-<books>  
-    <book email="zhoujunhui">  
-        <name>rjzjh</name>  
-        <price>jjjjjj</price>  
-    </book>  
-</books>  
-*/
+}
 
